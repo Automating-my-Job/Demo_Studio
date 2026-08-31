@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Static fixture dashboard</title>
+<style>
+  body { margin: 0; font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; background: #0B1220; color: #E8EEF5; }
+  .demo-page { padding: 140px 64px 64px; }
+  h1 { font-size: 40px; margin: 0 0 24px; }
+  .kpis { display: flex; gap: 24px; margin-bottom: 40px; }
+  .kpi { flex: 1; background: #141E31; border: 1px solid #24344F; border-radius: 12px; padding: 28px; }
+  .kpi .num { font-size: 44px; font-weight: 700; color: #5EC8D8; }
+  .kpi .label { color: #9FB3C8; margin-top: 6px; }
+  .panel { background: #141E31; border: 1px solid #24344F; border-radius: 12px; padding: 32px; }
+  .panel h2 { margin-top: 0; }
+  .row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #1D2A41; }
+</style>
+</head>
+<body>
+<div class="demo-page">
+  <h1>Portfolio Command Center</h1>
+  <div class="kpis">
+    <div class="kpi"><div class="num">14</div><div class="label">Active portfolios</div></div>
+    <div class="kpi"><div class="num">3</div><div class="label">Need attention</div></div>
+    <div class="kpi"><div class="num">92%</div><div class="label">On schedule</div></div>
+  </div>
+  <div class="panel">
+    <h2>Open risks</h2>
+    <div class="row"><span>Vendor contract renewal</span><span>Due Friday</span></div>
+    <div class="row"><span>Budget variance, Q3</span><span>Under review</span></div>
+    <div class="row"><span>Staffing gap, platform team</span><span>Escalated</span></div>
+  </div>
+</div>
+</body>
+</html>

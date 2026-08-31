@@ -1,0 +1,12 @@
+{
+  "title": "Static fixture dashboard",
+  "scrollHeight": 900,
+  "nodes": [
+    { "sel": "div.demo-page", "nth": 0, "matches": 1, "tag": "div", "text": "", "x": 0, "y": 0, "w": 1280, "h": 900, "clickable": false },
+    { "sel": "h1", "nth": 0, "matches": 1, "tag": "h1", "text": "Portfolio Command Center", "x": 64, "y": 140, "w": 1152, "h": 48, "clickable": false },
+    { "sel": "div.kpis", "nth": 0, "matches": 1, "tag": "div", "text": "", "x": 64, "y": 212, "w": 1152, "h": 130, "clickable": false },
+    { "sel": "div.kpi", "nth": 0, "matches": 3, "tag": "div", "text": "", "x": 64, "y": 212, "w": 368, "h": 130, "clickable": false },
+    { "sel": "div.kpi", "nth": 1, "matches": 3, "tag": "div", "text": "", "x": 456, "y": 212, "w": 368, "h": 130, "clickable": false },
+    { "sel": "div.panel", "nth": 0, "matches": 1, "tag": "div", "text": "", "x": 64, "y": 382, "w": 1152, "h": 300, "clickable": false }
+  ]
+}

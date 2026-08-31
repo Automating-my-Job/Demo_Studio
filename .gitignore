@@ -1,0 +1,9 @@
+node_modules/
+out/
+demo-out/
+*.mp4
+*.wav
+.DS_Store
+!src/renderer/public/demo-sample.mp4
+dist/
+!demos/app-tour/app-tour.mp4

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "static-fixture",
+  "target": { "kind": "html", "htmlFile": "./page.html", "readySelector": ".demo-page" },
+  "camera": { "pageSelector": ".demo-page" },
+  "record": { "width": 1280, "height": 720, "fps": 30, "stallMs": 5000, "crf": 24 },
+  "voice": { "engine": "say", "voice": "Samantha", "rate": 172, "tempo": 0.9 },
+  "instructions": "a tiny fixture demo for the end-to-end test",
+  "narration": [
+    { "key": "__HOOK__", "text": "Two lines of narration, and this is the first one, spoken over the page." },
+    { "key": "__CTA__", "text": "And this is the second, closing the loop." }
+  ],
+  "shots": [
+    { "id": "s1", "action": "frame", "subject": { "selector": ".demo-page" }, "mode": "wide", "ms": 500 },
+    { "id": "s2", "action": "hold", "ms": 800 },
+    { "id": "s3", "action": "say", "caption": "The whole page", "voKey": "__HOOK__" },
+    { "id": "s4", "action": "spot", "subject": { "selector": ".kpi", "nth": 1 }, "ms": 300 },
+    { "id": "s5", "action": "waitForVo" },
+    { "id": "s6", "action": "spotOut", "ms": 240 },
+    { "id": "s7", "action": "cta", "lines": [ { "text": "That is the loop." }, { "text": "demo-studio" } ], "voKey": "__CTA__" }
+  ]
+}
