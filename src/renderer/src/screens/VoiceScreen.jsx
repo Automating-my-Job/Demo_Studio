@@ -36,8 +36,20 @@ export default function VoiceScreen() {
     if (sampleJob.sample && audioRef.current) audioRef.current.play().catch(() => {});
   }, [sampleJob.sample]);
 
-  if (!p || !demo) return <p>Open a project first.</p>;
+  if (!p) return <p>Open a project first.</p>;
   const classic = p.kind === 'classic-project';
+  if (classic) {
+    return (
+      <div>
+        <h1 className="page-title">Voice</h1>
+        <div className="card">
+          <h3>Voice is owned by this hand-written project</h3>
+          <p className="hint">Edit its narration and voice settings in the project files, then use Run to record it as-is.</p>
+        </div>
+      </div>
+    );
+  }
+  if (!demo) return <p>This project does not have a readable demo.json.</p>;
 
   const patch = (fn) => {
     const next = JSON.parse(JSON.stringify(demo));
@@ -61,11 +73,7 @@ export default function VoiceScreen() {
   return (
     <div>
       <h1 className="page-title">Voice</h1>
-      <p className="page-sub">
-        {classic
-          ? 'This hand-written project is run with these as --engine/--voice overrides.'
-          : 'The engine and voice the narration is synthesized with.'}
-      </p>
+      <p className="page-sub">The engine and voice the narration is synthesized with.</p>
 
       <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
         {ENGINE_CARDS.map(c => (

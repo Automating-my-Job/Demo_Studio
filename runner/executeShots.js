@@ -112,6 +112,11 @@ async function runShot_(rec, shot) {
     }
     case 'type':
       return rec.type(shot.selector, shot.text, shot.ms || 800);
+    case 'observe':
+      return rec.observe({
+        ms: shot.ms, untilVo: shot.untilVo, untilSelector: shot.untilSelector,
+        textContains: shot.textContains, maxMs: shot.maxMs, speed: shot.speed,
+      });
     case 'waitForVo':
       return rec.waitForVo();
     case 'atVo':

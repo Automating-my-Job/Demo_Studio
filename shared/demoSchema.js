@@ -10,6 +10,7 @@
  * (unknown keys ride along untouched through load → edit → save).
  */
 const path = require('path');
+const { normalizeGithubShare } = require('./githubShare.js');
 
 /**
  * Everything a shot can do, mapped 1:1 onto recorder.js `rec` primitives.
@@ -24,6 +25,7 @@ const ACTIONS = {
   crawl: { fields: { ms: 'number?' } },
   click: { subject: true, fields: { settleMs: 'number?' } },
   type: { fields: { selector: 'string', text: 'string', ms: 'number?' } },
+  observe: { fields: { ms: 'number?', untilVo: 'boolean?', untilSelector: 'string?', textContains: 'string?', maxMs: 'number?', speed: 'number?' } },
   waitForVo: { fields: {} },
   atVo: { fields: { frac: 'number' } },
   hold: { fields: { ms: 'number' } },
@@ -59,10 +61,14 @@ function withDefaults_(obj, key) {
 /**
  * Accept the flat subject shape Gemini emits ({selector, nth, textContains}
  * directly on the shot) as well as the nested {subject: {...}} form, and
- * normalize onto the nested form.
+ * normalize onto the nested form. Only for actions that actually take a
+ * subject (ACTIONS[action].subject) — "type" also has its own top-level
+ * "selector" field (the input to type into), which must be left alone.
  */
 function normalizeSubject_(shot) {
   if (isPlainObject(shot.subject)) return;
+  const def = ACTIONS[shot.action];
+  if (!def || !def.subject) return;
   if (shot.selector !== undefined || shot.expr !== undefined) {
     shot.subject = {};
     ['selector', 'nth', 'textContains', 'expr'].forEach(k => {
@@ -133,6 +139,11 @@ function normalizeDemo(raw) {
   withDefaults_(demo, 'voice');
   if (ENGINES.indexOf(demo.voice.engine) === -1) {
     errors.push('voice.engine must be one of ' + ENGINES.join('/'));
+  }
+  if (demo.githubShare !== undefined) {
+    const share = normalizeGithubShare(demo.githubShare);
+    share.errors.forEach(error => errors.push(error));
+    if (share.config) demo.githubShare = share.config;
   }
 
   // Narration ---------------------------------------------------------------

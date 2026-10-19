@@ -12,7 +12,7 @@ function makeRec(overrides) {
   const calls = [];
   const rec = {};
   const names = ['go', 'say', 'atVo', 'type', 'click', 'frame', 'spot', 'spotOut', 'crawlThrough',
-    'hold', 'settle', 'motion', 'caption', 'cta', 'resetCamera', 'waitForVo'];
+    'hold', 'settle', 'motion', 'caption', 'cta', 'resetCamera', 'waitForVo', 'observe'];
   names.forEach(n => {
     rec[n] = async (...args) => {
       calls.push([n, ...args]);
@@ -85,6 +85,26 @@ test('action mapping: say, spot, waitForVo, spotOut', async () => {
   assert.deepStrictEqual(named[2], ['spot', '(document.querySelectorAll(".kpi")[1]), void 0', 300]);
   assert.deepStrictEqual(named[3], ['waitForVo']);
   assert.deepStrictEqual(named[4], ['spotOut', 280]);
+});
+
+test('observe passes through ms/untilVo/untilSelector/textContains/maxMs/speed', async () => {
+  const demo = demoWith([
+    { id: 's1', action: 'observe', ms: 9000 },
+    { id: 's2', action: 'observe', untilVo: true, maxMs: 20000 },
+    { id: 's3', action: 'observe', untilSelector: '.row-title', textContains: 'Last dry run', maxMs: 45000, speed: 2.5 },
+  ]);
+  const { rec, calls } = makeRec();
+  await buildStoryboard(demo, { targetUrl: 'u', injectCameraJs: null })(rec);
+  const observeCalls = calls.filter(c => c[0] === 'observe').map(c => c[1]);
+  assert.deepStrictEqual(observeCalls[0], {
+    ms: 9000, untilVo: undefined, untilSelector: undefined, textContains: undefined, maxMs: undefined, speed: undefined,
+  });
+  assert.deepStrictEqual(observeCalls[1], {
+    ms: undefined, untilVo: true, untilSelector: undefined, textContains: undefined, maxMs: 20000, speed: undefined,
+  });
+  assert.deepStrictEqual(observeCalls[2], {
+    ms: undefined, untilVo: undefined, untilSelector: '.row-title', textContains: 'Last dry run', maxMs: 45000, speed: 2.5,
+  });
 });
 
 test('frame returning crawl triggers crawlThrough; crawlIfTall:false suppresses it', async () => {

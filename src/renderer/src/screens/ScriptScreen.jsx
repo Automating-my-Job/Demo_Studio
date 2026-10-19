@@ -32,7 +32,7 @@ export default function ScriptScreen() {
   const saveTimer = useRef(null);
 
   useEffect(() => { setDraft(null); setRawMode(false); }, [p && p.dir]);
-  if (!p || !p.demo) return <p>Open a project first.</p>;
+  if (!p) return <p>Open a project first.</p>;
   if (p.kind === 'classic-project') {
     return (<>
       <h1 className="page-title">Script</h1>
@@ -40,6 +40,7 @@ export default function ScriptScreen() {
         text="This is a hand-written project — its narration.js and storyboard.js are edited in your editor, not here. The Run tab records it as-is." />
     </>);
   }
+  if (!p.demo) return <p>This project does not have a readable demo.json.</p>;
   const demo = draft || p.demo;
   const lintByShot = {};
   ((state.job.framing && state.job.framing.lint) || []).forEach(l => { lintByShot[l.shotId] = l; });

@@ -26,6 +26,7 @@ const { resolveTarget } = require('./resolveTarget.js');
 const { runClassic } = require('./classic.js');
 const { synthesizeSample } = require('./sample.js');
 const { frameProject } = require('./frame.js');
+const { loadGithubShare, buildGithubShareKit } = require('./githubShareKit.js');
 
 function loadDemo(projectDir) {
   const file = path.join(projectDir, 'demo.json');
@@ -58,6 +59,7 @@ function watchNarration(voDir, total) {
 
 async function runAuto(job) {
   const demo = loadDemo(job.projectDir);
+  const githubShareConfig = loadGithubShare(job.projectDir, demo);
   const ov = job.overrides || {};
   const engine = ov.engine || demo.voice.engine;
   const voice = ov.voice || demo.voice.voice;
@@ -158,12 +160,23 @@ async function runAuto(job) {
     emit(events.log('err', 'audio QA skipped: ' + err.message));
   }
 
+  let githubShare = null;
+  if (githubShareConfig) {
+    githubShare = buildGithubShareKit({
+      projectDir: job.projectDir,
+      deliverPath,
+      config: githubShareConfig,
+    });
+    emit(events.log('out', 'GitHub share kit ready: ' + githubShare.repositoryPath));
+  }
+
   emit(events.result({
     outPath: result.outPath,
     deliverPath,
     durationSec: result.durationSec,
     bytes: result.bytes,
     audioQa,
+    githubShare,
   }));
 }
 
@@ -179,7 +192,16 @@ async function runVerify(job) {
 async function dispatch(job) {
   if (job.kind === 'run-auto') return runAuto(job);
   if (job.kind === 'run-classic') {
+    const githubShareConfig = loadGithubShare(job.projectDir, null);
     const r = await runClassic(job, emit);
+    if (githubShareConfig) {
+      r.githubShare = buildGithubShareKit({
+        projectDir: job.projectDir,
+        deliverPath: r.deliverPath,
+        config: githubShareConfig,
+      });
+      emit(events.log('out', 'GitHub share kit ready: ' + r.githubShare.repositoryPath));
+    }
     return emit(events.result(r));
   }
   if (job.kind === 'sample') return synthesizeSample(job, emit);

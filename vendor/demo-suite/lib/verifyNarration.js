@@ -106,4 +106,21 @@ if (require.main === module) {
   }).catch(err => { console.error('\n  ' + err.message + '\n'); process.exit(1); });
 }
 
-module.exports = { verifyManifest };
+/**
+ * Whisper's transcript of a whole audio or video file (the finished cut),
+ * for the word-for-word check against the script (preflight.js wordDiff).
+ * @param {{model?: string, python?: string}} [opts] - python: an interpreter
+ *   that has mlx-whisper (macOS's /usr/bin/python3 often does when a
+ *   Homebrew python3 earlier on PATH does not).
+ */
+function transcribeFile(file, opts) {
+  const o = opts || {};
+  const model = o.model || 'mlx-community/whisper-small.en-mlx';
+  const py = 'import mlx_whisper, sys\n' +
+    'r = mlx_whisper.transcribe(sys.argv[1], path_or_hf_repo=sys.argv[2], word_timestamps=False, verbose=False)\n' +
+    'sys.stdout.write(r["text"].strip())';
+  return execFileSync(o.python || 'python3', ['-c', py, file, model],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 });
+}
+
+module.exports = { verifyManifest, transcribeFile };

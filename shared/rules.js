@@ -30,6 +30,7 @@ SHOT MECHANICS:
 - "spot"/"spotOut": {selector, nth?, ms?} — dim + ring the subject / release it.
 - "click": {selector, nth?, settleMs?} — really clicks the element, then waits for the page.
 - "waitForVo": {} — holds the current composition until the spoken line finishes.
+- "observe": {ms?, untilVo?, untilSelector?, textContains?, maxMs?, speed?} — for a page that changes ON ITS OWN (a live view, a poll-driven feed, anything the storyboard does not itself move): films the real, moving page instead of forcing one state, stopping on "ms" of film time, when the current line ends ("untilVo"), or once "untilSelector" (+ optional "textContains") matches — always capped by "maxMs" (default 30000ms of REAL time). "speed" fast-forwards what is captured (e.g. "speed": 2 shows twice the real progress in the same picture time); never use it to invent motion that is not really happening on the page.
 - "hold": {ms} — holds the current frame (film time). Use after the opening frame and before the end.
 - "cta": {lines: [{text}, {text}], voKey, caption?} — the closing card.
 - Only use selectors (with nth when needed) that appear in the outline you were given. Never invent selectors.

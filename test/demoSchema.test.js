@@ -44,6 +44,25 @@ test('unknown keys survive normalization (round-trip safety)', () => {
   assert.strictEqual(demo.record.customEncoder, 'x265');
 });
 
+test('GitHub share settings normalize with defaults and fail early when invalid', () => {
+  const raw = validDemo();
+  raw.githubShare = {
+    repository: 'https://github.com/example/demo',
+    title: 'Example — Demo',
+    description: 'Demo video for Example.',
+    summary: 'A short summary.',
+    features: ['One feature.'],
+  };
+  const valid = normalizeDemo(raw);
+  assert.deepStrictEqual(valid.errors, []);
+  assert.strictEqual(valid.demo.githubShare.branch, 'main');
+  assert.strictEqual(valid.demo.githubShare.videoFileName, 'demo.mp4');
+
+  raw.githubShare.repository = 'https://example.com/not-github';
+  const invalid = normalizeDemo(raw);
+  assert.ok(invalid.errors.some(error => error.includes('github.com')));
+});
+
 test('flat Gemini subject shape is normalized into subject', () => {
   const raw = validDemo();
   raw.shots.push({ id: 'sF', action: 'spot', selector: '.kpi', nth: 2 });
@@ -52,6 +71,20 @@ test('flat Gemini subject shape is normalized into subject', () => {
   const s = demo.shots[demo.shots.length - 1];
   assert.deepStrictEqual(s.subject, { selector: '.kpi', nth: 2 });
   assert.strictEqual(s.selector, undefined);
+});
+
+test('"type" keeps its own top-level selector — it is not a subject action', () => {
+  // regression: normalizeSubject_ used to hijack ANY top-level selector into
+  // shot.subject regardless of the action, so a "type" shot (whose selector
+  // names the input to type into) lost its required field and failed
+  // validation with "missing required field selector".
+  const raw = validDemo();
+  raw.shots.push({ id: 'sT', action: 'type', selector: '#profile-address', text: 'hi' });
+  const { errors, demo } = normalizeDemo(raw);
+  assert.deepStrictEqual(errors, []);
+  const s = demo.shots[demo.shots.length - 1];
+  assert.strictEqual(s.selector, '#profile-address');
+  assert.strictEqual(s.subject, undefined);
 });
 
 test('missing subject on a subject action is an error', () => {

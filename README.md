@@ -99,6 +99,45 @@ caption cta resetCamera run`. Hand-editing is a first-class path: `null`
 entries are skipped, `"disabled": true` keeps a shot in the file but out of
 the cut, unknown keys survive round-trips.
 
+## GitHub share kit
+
+Demo Studio can prepare a clean, local handoff for a demo-only GitHub
+repository. Add `githubShare` to a Studio project's `demo.json`, or add a
+`github-share.json` file beside `build.js` in a classic project:
+
+```json
+{
+  "repository": "https://github.com/OWNER/DEMO_REPOSITORY",
+  "title": "Product — Demo",
+  "description": "Demo video for Product.",
+  "summary": "A short, outcome-focused product summary.",
+  "features": ["First viewer takeaway.", "Second viewer takeaway."],
+  "availability": "Publishing soon. Free for pilot customers who provide feedback."
+}
+```
+
+After a successful run, `demo-out/github-share/repository/` contains only a
+short `README.md` and the upload-safe MP4 under `demo/`. The README links to
+GitHub's raw-file route because the ordinary blob page may decline to preview
+an MP4 even when the file is small. `github-description.txt` stays one level
+above the repository folder for copying into GitHub's About field.
+
+This feature never signs in to GitHub, stores credentials, creates a
+repository, or publishes anything. Review the generated copy and video before
+you upload them.
+
+## Live apps (Salesforce Setup and other real sites)
+
+`runDemo` films a real, signed-in app when you turn on its live options:
+
+- `frames: true`: follows every frame, including cross-site iframes, and accepts subjects by visible label: `rec.click({ text: 'Manage Assignments' })`, `rec.type({ text: 'Quick Find' }, 'Permission Sets')`.
+- `cursor: true`: a pointer glides to each target and clicks for real; typing sends real keystrokes at about 10 characters a second.
+- `rec.beat(key, { say })`: one sentence per beat; the labels it quotes must be on screen. Run once with `dryRun: true` (the wording preflight) before filming.
+- `rec.redact(pairs, { maskEmails: true })` and `rec.audit(where)`: display-only redaction in every frame, and a never-show audit that must read zero.
+- After filming: `frameScan.js` reads every frame (on-device OCR) and `preflight.js`'s `wordDiff` checks the narration word for word.
+
+AGENTS.md §2 lists each piece and why it exists; §5 has the Salesforce traps.
+
 ## Keys
 
 Settings encrypts keys with the macOS keychain (Electron `safeStorage`) and

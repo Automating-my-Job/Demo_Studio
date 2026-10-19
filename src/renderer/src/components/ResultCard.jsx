@@ -36,6 +36,18 @@ export default function ResultCard({ result }) {
         )}
         <span className="chip">Share the “linkedin” file — it is the BT.709 upload-safe encode</span>
       </div>
+      {result.githubShare && (
+        <div className="banner info" style={{ marginTop: 14 }}>
+          <span className="msym">ios_share</span>
+          <span style={{ flex: 1 }}>
+            <strong>GitHub share kit ready</strong><br />
+            The repository folder contains only the delivery MP4 and a short README. The repository description is kept beside it so it is not accidentally published as a file.
+          </span>
+          <md-outlined-button onClick={() => api.reveal({ path: result.githubShare.repositoryPath })}>
+            Reveal share kit
+          </md-outlined-button>
+        </div>
+      )}
     </div>
   );
 }

@@ -246,12 +246,14 @@ async function synthesizeGoogle_(text, outWav, opts) {
       saFile + ', or a plain key: export GOOGLE_TTS_KEY, ' +
       'or save it once with:  echo "YOUR_KEY" > ~/.google_tts_key && chmod 600 ~/.google_tts_key');
   }
-  // CHIRP3-HD REJECTS speakingRate (and pitch, and SSML) OUTRIGHT -- documented
-  // limitation, not a bug: only the older Studio/Neural2/WaveNet families take
-  // a numeric rate.
-  const isChirp3Hd = /Chirp3-HD/i.test(opts.voice || '');
+  // Chirp3-HD still rejects pitch and SSML, but it now HONORS speakingRate
+  // (pace control). This used to be excluded outright; verified 2026-09-18
+  // against the live API: Charon at 0.90 renders the same line ~28% longer
+  // with no error. Charon's default pace is ~185 wpm, well above the ~150 wpm
+  // "clear and unhurried" target, so the knob matters. Sent only when it is
+  // not 1.0, so default requests are byte-identical to before.
   const audioConfig = { audioEncoding: 'LINEAR16', sampleRateHertz: 48000 };
-  if (!isChirp3Hd && opts.googleRate) audioConfig.speakingRate = opts.googleRate;
+  if (opts.googleRate && opts.googleRate !== 1) audioConfig.speakingRate = opts.googleRate;
   const body = JSON.stringify({
     input: { text: shapePauses_(text, 'google') },
     voice: { languageCode: opts.languageCode || 'en-US', name: opts.voice },
@@ -385,15 +387,45 @@ function readKeys_(envName, fileName) {
  * judgement. Measured: a 30-word line came back as 73s of audio, 44s of it
  * one trailing silence. Leading silence cut to nothing, internal pauses
  * capped at 0.55s, tail cut with it.
+ *
+ * Also used, with tighter opts, on Chirp3-HD (google) clips: they carry a
+ * smaller but still real ~150-350ms of natural leading/trailing quiet of
+ * their own (measured with `ffmpeg -af silencedetect=noise=-40dB:d=0.05` on
+ * raw clips). That is invisible in a demo's build log but is exactly the
+ * kind of thing that blows a "no silence gap over 1.5s" QA budget once a
+ * beat's own scripted transition time is added on top — found directing
+ * Freedact's demo, where several line-to-line gaps measured 500-1000ms
+ * longer than the scripted transition alone explained, entirely accounted
+ * for by each clip's own quiet edges. Trim it at the source instead of
+ * budgeting extra margin into every storyboard transition.
  */
-function trimSilence_(file) {
+function trimSilence_(file, opts) {
+  const startSilence = (opts && opts.startSilence !== undefined) ? opts.startSilence : 0.10;
+  const stopSilence = (opts && opts.stopSilence !== undefined) ? opts.stopSilence : 0.55;
+  const thresholdDb = (opts && opts.thresholdDb !== undefined) ? opts.thresholdDb : -38;
   const tmp = file + '.trim.wav';
-  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', file, '-af',
-    'silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.10:' +
-    'stop_periods=-1:stop_threshold=-38dB:stop_silence=0.55',
+  // mode 'edges' trims ONLY the leading and trailing quiet (trim the start,
+  // reverse, trim the new start, reverse back). The default mode's
+  // stop_periods=-1 also collapses every INTERIOR pause longer than
+  // stopSilence down to stopSilence — fine for Gemini's padded clips at
+  // 0.55s, but at a tight 0.12s it crushed Chirp3-HD's natural sentence and
+  // comma pauses (a 0.57s full stop became 0.12s) and two-sentence lines ran
+  // together.
+  const edge = (keep) => 'silenceremove=start_periods=1:start_threshold=' + thresholdDb +
+    'dB:start_silence=' + keep;
+  const filter = (opts && opts.mode === 'edges')
+    ? [edge(startSilence), 'areverse', edge(stopSilence), 'areverse'].join(',')
+    : edge(startSilence) + ':stop_periods=-1:stop_threshold=' + thresholdDb + 'dB:stop_silence=' + stopSilence;
+  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', file, '-af', filter,
     '-ar', '48000', '-ac', '1', tmp]);
   fs.renameSync(tmp, file);
 }
+
+// Chirp3-HD's own padding is much smaller than Gemini's — a tight trim (a
+// little quiet kept at each edge so a word never feels clipped) rather than
+// the aggressive gemini defaults above, and edges only, so the voice keeps
+// its own pauses between sentences.
+const GOOGLE_TRIM_OPTS = { startSilence: 0.04, stopSilence: 0.12, thresholdDb: -40, mode: 'edges' };
 
 /** Nudges a clip's spoken pace toward targetWpm with a pitch-preserving tempo change. */
 function normalizeWpm_(file, text, targetWpm) {
@@ -440,8 +472,8 @@ function clipName(caption, i) {
  * @param {number} [opts.rate=172] - macOS `say` words-per-minute knob (the
  *   premium voices mostly ignore it; use opts.tempo instead).
  * @param {number} [opts.tempo=0.90] - pitch-preserving tempo for `say`.
- * @param {number} [opts.googleRate=1.0] - speakingRate for non-Chirp3-HD
- *   Google voices (Chirp3-HD ignores this; see synthesizeGoogle_).
+ * @param {number} [opts.googleRate=1.0] - speakingRate for Google voices,
+ *   Chirp3-HD included (see synthesizeGoogle_). Part of the cache key.
  * @param {string} [opts.style=''] - Gemini style direction. Leave empty; see
  *   the module doc.
  * @param {number} [opts.targetWpm=0] - 0 disables all pace-correction and
@@ -536,9 +568,14 @@ async function build(script, opts) {
     const lineRate = spec.rate || rate;
     const file = path.join(workDir, clipName(caption, i));
 
+    // googleRate and the Google trim mode join the key only when they differ
+    // from the old defaults, so existing cached clips keep their keys; without
+    // them a rate or trim change silently reused clips rendered the old way.
     const fingerprint = crypto.createHash('sha256')
       .update([engine, lineVoice, engine === 'say' ? String(lineRate) + ':' + String(tempo)
-        : style + ':' + geminiModel + ':' + String(targetWpm), text].join(' '))
+        : style + ':' + geminiModel + ':' + String(targetWpm) +
+          (engine === 'google' && googleRate !== 1 ? ':rate' + String(googleRate) : '') +
+          (engine === 'google' && GOOGLE_TRIM_OPTS.mode ? ':trim-' + GOOGLE_TRIM_OPTS.mode : ''), text].join(' '))
       .digest('hex').slice(0, 24);
     const cached = path.join(CACHE_DIR, fingerprint + '.wav');
 
@@ -547,7 +584,7 @@ async function build(script, opts) {
       reused++;
     } else {
       const key = await nextKey_();
-      if (engine === 'google') await synthesizeGoogle_(text, file, { voice: lineVoice, googleRate, key, serviceAccountFile: opts.serviceAccountFile });
+      if (engine === 'google') { await synthesizeGoogle_(text, file, { voice: lineVoice, googleRate, key, serviceAccountFile: opts.serviceAccountFile }); trimSilence_(file, GOOGLE_TRIM_OPTS); }
       else if (engine === 'gemini') await synthesizeGemini_(text, file, { voice: lineVoice, style, key, model: geminiModel });
       else synthesizeSay_(text, file, { voice: lineVoice, rate: lineRate, tempo });
 

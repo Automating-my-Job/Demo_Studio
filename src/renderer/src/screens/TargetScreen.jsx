@@ -11,7 +11,23 @@ export default function TargetScreen() {
   const saveTimer = useRef(null);
 
   useEffect(() => { setDraft(null); }, [p && p.dir]);
-  if (!p || !p.demo) return <p>Open a project first.</p>;
+  if (!p) return <p>Open a project first.</p>;
+  if (p.kind === 'classic-project') {
+    return (
+      <div>
+        <h1 className="page-title">{p.dir.split('/').pop()}</h1>
+        <p className="page-sub">{p.dir}</p>
+        <div className="card">
+          <h3>Hand-written project</h3>
+          <p className="hint">
+            This folder has its own build.js and storyboard. Demo Studio runs it as-is;
+            framing and the shot editor apply only to Demo Studio projects.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (!p.demo) return <p>This project does not have a readable demo.json.</p>;
   const demo = draft || p.demo;
 
   const patch = (fn) => {
@@ -24,7 +40,6 @@ export default function TargetScreen() {
 
   const geminiSet = state.settings && state.settings.geminiKey && state.settings.geminiKey.set;
   const t = demo.target || {};
-  const classic = p.kind === 'classic-project';
 
   return (
     <div>
@@ -35,16 +50,7 @@ export default function TargetScreen() {
         <EngineWarning level="error" icon="error" text={'demo.json needs attention: ' + p.errors.join(' · ')} />
       )}
 
-      {classic ? (
-        <div className="card">
-          <h3>Hand-written project</h3>
-          <p className="hint">
-            This folder has its own build.js and storyboard — Demo Studio runs it exactly as
-            <code> node build.js</code> would. Voice and engine can still be overridden on the Run screen;
-            framing and the shot editor apply only to Demo Studio projects.
-          </p>
-        </div>
-      ) : (<>
+      <>
         <div className="card">
           <h3>Target</h3>
           <p className="hint">The page the demo records.</p>
@@ -107,7 +113,7 @@ export default function TargetScreen() {
             </div>
           )}
         </div>
-      </>)}
+      </>
     </div>
   );
 }

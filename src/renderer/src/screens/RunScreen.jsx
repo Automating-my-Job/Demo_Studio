@@ -10,10 +10,11 @@ export default function RunScreen() {
   const p = state.project;
   const job = state.job;
   const aux = state.auxJob;
-  if (!p || !p.demo) return <p>Open a project first.</p>;
+  if (!p) return <p>Open a project first.</p>;
 
   const classic = p.kind === 'classic-project';
-  const engine = (p.demo.voice && p.demo.voice.engine) || 'google';
+  if (!classic && !p.demo) return <p>This project does not have a readable demo.json.</p>;
+  const engine = (p.demo && p.demo.voice && p.demo.voice.engine) || 'google';
   const isRunJob = job.kind === 'run-auto' || job.kind === 'run-classic';
 
   const steps = classic

@@ -125,7 +125,7 @@ class Cdp {
     const msg = { id: id, method: method, params: params || {} };
     if (sessionId) msg.sessionId = sessionId;
     return new Promise((resolve, reject) => {
-      this._pending[id] = { resolve: resolve, reject: reject };
+      this._pending[id] = { resolve: resolve, reject: reject, method: method };
       this._writeFrame(Buffer.from(JSON.stringify(msg), 'utf8'));
     });
   }
@@ -224,7 +224,9 @@ class Cdp {
     if (msg.id && this._pending[msg.id]) {
       const p = this._pending[msg.id];
       delete this._pending[msg.id];
-      if (msg.error) p.reject(new Error(msg.method + ': ' + JSON.stringify(msg.error)));
+      // Responses carry only an id; the method name comes from the request
+      // (errors used to read "undefined: {...}").
+      if (msg.error) p.reject(new Error(p.method + ': ' + JSON.stringify(msg.error)));
       else p.resolve(msg.result);
       return;
     }
