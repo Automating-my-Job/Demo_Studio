@@ -146,9 +146,10 @@ function findChrome(explicit) {
 // Every delivered file is limited-range BT.709 and tagged so: the JPEG
 // frames are full-range BT.601, and untagged output played back washed out
 // or crushed depending on the player (every 2026-10-27 take was tagged
-// pc/bt470bg).
+// pc/bt470bg). setparams tags the frames too: without it x264 wrote the
+// primaries and transfer as unknown.
 const BT709_TAGS = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709'];
-const BT709_FROM_JPEG = (W, H) => 'scale=' + W + ':' + H + ':in_range=full:out_range=tv:in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p';
+const BT709_FROM_JPEG = (W, H) => 'scale=' + W + ':' + H + ':in_range=full:out_range=tv:in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709';
 
 /** Re-masters an mp4's audio in place (video copied): stereo, two-pass loudnorm. */
 function masterInPlace(file, target) {
@@ -743,6 +744,10 @@ async function runDemo(buildFn, opts) {
       o = o || {};
       await retryGone(ensureTop);
       await run('(window.__spotOff&&__spotOff(),window.__cursorHide&&__cursorHide(),true)');
+      // No focus ring in a still: the app's own focus outline reads as our
+      // highlight (a blue box on M1's chart card). Focus is not data.
+      await run('(function(){var a=document.activeElement;while(a&&a.shadowRoot&&a.shadowRoot.activeElement)a=a.shadowRoot.activeElement;' +
+        'if(a&&a!==document.body&&a.blur)a.blur();return true})()');
       const top = o.clipTop !== undefined ? o.clipTop
         : ((await run('(function(){var b=document.getElementById("__demoBand");return b&&b.style.display!=="none"?Math.round(b.getBoundingClientRect().bottom):0})()')).result.value || 0);
       const subjects = {};

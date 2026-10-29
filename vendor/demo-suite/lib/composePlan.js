@@ -56,12 +56,14 @@ const EASE = {
 /**
  * Output presets. win: the app window's width as a share of the frame;
  * fill: how much of the frame width a framed subject may take; maxZoom: the
- * taste limit (the 2x capture's resolution limit applies too).
+ * taste limit (the 2x capture's resolution limit applies too); minText: a
+ * framed subject's text is drawn at least this many screen px per app px,
+ * so it reads at feed size (a whole-row frame at 1:1 was 0.7x: illegible).
  */
 const ASPECTS = {
-  '16:9': { W: 1920, H: 1080, win: 0.80, fill: 0.88, maxZoom: 2.4, titlePx: 40, pillBottom: 56, hookPx: 96 },
-  '1:1': { W: 1080, H: 1080, win: 0.92, fill: 0.94, maxZoom: 3.4, titlePx: 38, pillBottom: 52, hookPx: 76 },
-  '9:16': { W: 1080, H: 1920, win: 0.92, fill: 0.94, maxZoom: 3.6, titlePx: 44, pillBottom: 220, hookPx: 84 },
+  '16:9': { W: 1920, H: 1080, win: 0.80, fill: 0.88, maxZoom: 2.4, minText: 1, titlePx: 40, pillBottom: 56, hookPx: 96 },
+  '1:1': { W: 1080, H: 1080, win: 0.92, fill: 0.94, maxZoom: 3.4, minText: 1, titlePx: 38, pillBottom: 52, hookPx: 76 },
+  '9:16': { W: 1080, H: 1920, win: 0.92, fill: 0.94, maxZoom: 3.6, minText: 1, titlePx: 44, pillBottom: 220, hookPx: 84 },
 };
 
 const lerp = (a, b, e) => a + (b - a) * e;
@@ -109,14 +111,21 @@ function wideCamera(L) {
   return clampCamera({ cx: L.win.x + L.win.w / 2, cy: L.win.y + L.win.h / 2, s: 1 }, L);
 }
 
-/** The camera that frames a still-px rect: as large as fill/height allow, never past maxZoom or the capture's pixels. */
-function frameFor(rect, L, zoom) {
+/**
+ * The camera that frames a still-px rect: as large as fill/height allow, and
+ * never smaller than legible (minText), never past maxZoom or the capture's
+ * pixels. When legibility wins over the fit, it centres on `focus` (the
+ * ringed subject) so that is what stays in view.
+ */
+function frameFor(rect, L, zoom, focus) {
   const R = sceneRect(rect, L);
   const w = Math.max(1, R[2] - R[0]), h = Math.max(1, R[3] - R[1]);
   const cap = Math.min(L.maxZoom, L.res / L.k);
-  let s = zoom || Math.min(L.fill * L.W / w, 0.62 * L.safeH / h);
+  const fit = Math.min(L.fill * L.W / w, 0.62 * L.safeH / h);
+  let s = zoom || Math.max(fit, (L.minText || 0) / L.k);
   s = Math.max(1, Math.min(s, cap));
-  return clampCamera({ cx: (R[0] + R[2]) / 2, cy: (R[1] + R[3]) / 2, s: s }, L);
+  const C = s > fit * 1.001 && focus ? sceneRect(focus, L) : R;
+  return clampCamera({ cx: (C[0] + C[2]) / 2, cy: (C[1] + C[3]) / 2, s: s }, L);
 }
 
 /** Screen px of a scene point under a camera. */
@@ -239,6 +248,12 @@ function planComposition(tl, cap, audio, words, aspect) {
   };
   let still = null;
   let appStarted = false;
+  // Every move settles into a slow push (4% over 8 s), so a held frame is
+  // never dead; the next move or cut starts from wherever the drift got to.
+  const camMove = (t, ms, to) => {
+    push(P.camera, wide, MIX.cam, t, ms, to);
+    push(P.camera, wide, MIX.cam, t + ms, 8000, clampCamera({ cx: to.cx, cy: to.cy, s: to.s * 1.04 }, L), 'linear');
+  };
 
   shots.forEach((sh, i) => {
     const type = sh.type || 'app';
@@ -249,23 +264,26 @@ function planComposition(tl, cap, audio, words, aspect) {
       // Each word appears as it is spoken (Whisper's times when they line up, else evenly).
       const times = toks.map((w, j) => list.length === toks.length ? sh.line.atMs + list[j].s * 1000
         : sh.line.speechAt + (sh.line.speechEnd - sh.line.speechAt) * j / toks.length);
-      P.hook = { t0: sh.t0, t1: sh.t1, lockup: sh.lockup || '', words: toks.map((w, j) => ({ w: w, t: Math.round(times[j] - 120) })) };
+      // It lifts away just before the app arrives, never over it.
+      P.hook = { t0: sh.t0, t1: sh.t1 - 250, lockup: sh.lockup || '', words: toks.map((w, j) => ({ w: w, t: Math.round(times[j] - 120) })) };
       return;
     }
     if (type === 'end') {
       if (appStarted) push(P.windowAlpha, 0, MIX.num, sh.t0, 500, 0, 'accel');
-      P.end = { t0: sh.t0, lines: sh.lines || [] };
+      // Lines may land on their spoken words ({word}), else they stagger in.
+      P.end = { t0: sh.t0, lines: (sh.lines || []).map((l, j) => Object.assign({}, l, {
+        t: l.word ? Math.max(sh.t0, cueAt(sh, l, 0)) : sh.t0 + 150 + 120 * j })) };
       return;
     }
     // An app shot.
     if (!sh.still || !cap.stills[sh.still]) throw new Error(sh.key + ': unknown still ' + sh.still);
     if (!appStarted) {
-      push(P.windowAlpha, 0, MIX.num, sh.t0, 750, 1, 'decel');
+      push(P.windowAlpha, 0, MIX.num, sh.t0 + 120, 750, 1, 'decel');
       appStarted = true;
     }
     if (still !== sh.still) {
       P.still.push({ t: sh.t0, key: sh.still, fade: still === null ? 0 : 380 });
-      if (still !== null) push(P.camera, wide, MIX.cam, sh.t0, 600, wide, 'standard');
+      camMove(sh.t0, still === null ? 1 : 600, wide);
       still = sh.still;
     }
     if (sh.title) P.titles.push({ t0: sh.t0 + 250, t1: sh.t1 - 120, text: sh.title });
@@ -280,7 +298,7 @@ function planComposition(tl, cap, audio, words, aspect) {
         const cam = sample(P.camera, t, wide, MIX.cam);
         const target = [(sceneRect(r, L)[0] + sceneRect(r, L)[2]) / 2, (sceneRect(r, L)[1] + sceneRect(r, L)[3]) / 2];
         const glide = mv.glideMs || 650;
-        if (mv.frame) push(P.camera, wide, MIX.cam, t - glide - 200, 800, frameFor(union(still, [].concat(mv.frame)), L, mv.zoom));
+        if (mv.frame) camMove(t - glide - 200, 800, frameFor(union(still, [].concat(mv.frame)), L, mv.zoom, r));
         if (!cursorOn) {
           const start = [target[0] + 150 / cam.s, target[1] + 120 / cam.s];
           // The pointer is placed before it fades in, never drawn at the origin.
@@ -303,7 +321,7 @@ function planComposition(tl, cap, audio, words, aspect) {
       if (mv.focus || mv.frame) {
         if (!mv.click && !mv.keep) {
           const rect = mv.frame ? union(still, [].concat(mv.frame)) : subject(still, mv.focus);
-          push(P.camera, wide, MIX.cam, t, mv.ms || 850, frameFor(rect, L, mv.zoom));
+          camMove(t, mv.ms || 850, frameFor(rect, L, mv.zoom, mv.focus ? subject(still, mv.focus) : null));
         }
         if (mv.focus) {
           const to = { rect: subject(still, mv.focus), a: 1 };
@@ -312,7 +330,7 @@ function planComposition(tl, cap, audio, words, aspect) {
           push(P.ring, P.ring0, MIX.ring, t + 1, mv.ms || 650, to);
         }
       }
-      if (mv.wide) push(P.camera, wide, MIX.cam, t, mv.ms || 850, wide);
+      if (mv.wide) camMove(t, mv.ms || 850, wide);
     });
     if (lastPress !== null) {
       const off = Math.min(lastPress + 700, sh.t1 - 300);

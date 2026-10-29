@@ -94,3 +94,23 @@ test('the cursor is placed before it shows, and is gone before the end card', ()
 test('overlayTexts lists every word the stage may draw', () => {
   assert.deepStrictEqual(C.overlayTexts(TL), ['Where is it?', 'Products that lose', 'Revenue Execution', 'revenue.opsgs.com']);
 });
+
+test('a framed subject is never drawn smaller than the app draws it, centred on the ringed part', () => {
+  ['16:9', '1:1'].forEach((aspect) => {
+    const L = C.layout(aspect, { w: 1920, h: 982 }, 2);
+    const row = [250, 762, 1670, 807], pill = [1556, 768, 1654, 800];
+    const cam = C.frameFor(row, L, null, pill);
+    assert.ok(cam.s * L.k >= 1 - 1e-9, aspect + ': text at least native size (' + (cam.s * L.k).toFixed(2) + ')');
+    const p = C.toScreen(C.sceneRect(pill, L).slice(2), cam, L);
+    assert.ok(p[0] <= L.W && p[1] <= L.H, aspect + ': the ringed pill stays in view');
+  });
+});
+
+test('end-card lines can land on their spoken words', () => {
+  const tl = JSON.parse(JSON.stringify(TL));
+  tl.shots[2].lines[1].word = 'revenue';
+  const words = Object.assign({}, WORDS, { CTA: [{ w: 'Read', s: 0.2 }, { w: 'revenue', s: 2.5 }] });
+  const P = C.planComposition(tl, CAP, AUDIO, words, '16:9');
+  assert.strictEqual(P.end.lines[1].t, Math.round(P.audio[2].atMs + 2500 - 200));
+  assert.strictEqual(P.end.lines[0].t, P.end.t0 + 150, 'an uncued line staggers in');
+});

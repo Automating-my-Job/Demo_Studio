@@ -114,8 +114,8 @@ test('capture → compose: audited 2x stills below the band, then a tagged BT.70
       timeline: { shots: [{ key: 'ONE', still: 'mix', title: 'Products losing more', moves: [{ focus: 'row', word: 'flags' }, { click: 'go', then: 'reasons', at: 1400 }] }], tailMs: 300 },
       aspect: '1:1', outFile: out, chromePath: CHROME });
     assert.ok(r.frames > 20);
-    const v = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height,color_range,color_space,channels', '-of', 'compact', out], { encoding: 'utf8' });
-    assert.ok(/width=1080\|height=1080\|color_range=tv\|color_space=bt709/.test(v), v);
+    const v = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height,color_range,color_space,color_transfer,color_primaries,channels', '-of', 'compact', out], { encoding: 'utf8' });
+    assert.ok(/width=1080\|height=1080\|color_range=tv\|color_space=bt709\|color_transfer=bt709\|color_primaries=bt709/.test(v), v);
     assert.ok(/channels=2/.test(v), 'stereo');
   } finally {
     server.close();
@@ -135,8 +135,8 @@ test('live takes deliver limited-range BT.709 video and a stereo master at -16 L
       for (let i = 0; i < 24; i++) await rec.hold(100);
     }, { outDir: dir, outFile: 'take.mp4', width: 640, height: 360, fps: 10, frames: true, burnCaptions: false, chromePath: CHROME,
       voManifestPath: path.join(dir, 'manifest.json'), topFrameJs: buildCameraClientJs({ captionHeight: 0, margin: 8 }) });
-    const v = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=color_range,color_space,channels', '-of', 'compact', r.outPath], { encoding: 'utf8' });
-    assert.ok(/color_range=tv\|color_space=bt709/.test(v), v);
+    const v = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=color_range,color_space,color_transfer,color_primaries,channels', '-of', 'compact', r.outPath], { encoding: 'utf8' });
+    assert.ok(/color_range=tv\|color_space=bt709\|color_transfer=bt709\|color_primaries=bt709/.test(v), v);
     const l = loudnessReport(r.outPath);
     assert.strictEqual(l.layout, 'stereo');
     assert.ok(Math.abs(l.lufs + 16) <= 1.5 && l.truePeakDb <= -1.4, JSON.stringify(l));

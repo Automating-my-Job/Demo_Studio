@@ -351,6 +351,17 @@ the specification for §4.
   halfway down. Offset the clip by `Page.getLayoutMetrics`'
   `cssVisualViewport.pageX/pageY` (regression test: the red-marker still in
   `test/compose.test.js`).
+- **A still keeps the app's focus outline, and it reads as our ring.** M1's
+  Sales Outcomes chart card carried a blue focus border after the off-camera
+  clicks; `rec.still` now blurs the deepest active element first.
+- **Frame for legibility, not for fit.** Fitting a 1,400 px table row into a
+  1:1 frame drew its text at 0.7x: unreadable in a feed. `frameFor` keeps
+  text at least native size (`minText`) and centres on the ringed subject
+  when the whole frame subject cannot fit.
+- **Small text misreads as an email during moves.** The OCR read the app
+  footer's public support address as a garbled, non-allowlisted address on
+  frames mid-crossfade (16:9) and at small scale (1:1). M1's capture hides
+  that footer line display-only; prefer that to accepting hits by eye.
 - **Hidden text never loads its web font.** The compose stage's titles and
   cards start `display:none`, so `document.fonts.ready` resolved with the
   font unloaded; load it explicitly (`document.fonts.load`) before frame 0.

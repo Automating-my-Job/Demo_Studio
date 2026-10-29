@@ -134,7 +134,7 @@ function stageMain(P, C) {
       const inT = t - P.end.t0;
       ec.style.display = inT < 0 ? 'none' : 'flex';
       endLines.forEach((el, j) => {
-        const u = ease.decel(clamp01((inT - 150 - 120 * j) / 600));
+        const u = ease.decel(clamp01((t - P.end.lines[j].t) / 600));
         el.style.opacity = u.toFixed(3);
         el.style.transform = 'translateY(' + ((1 - u) * 18).toFixed(2) + 'px)';
       });

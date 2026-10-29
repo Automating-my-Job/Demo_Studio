@@ -129,7 +129,7 @@ async function renderComposition(o) {
     if (!(await evaluate(client, 'window.__ready'))) throw new Error('stage: the title font did not load');
     const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
       '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'png', '-i', '-',
-      '-vf', 'scale=in_range=full:out_range=tv:out_color_matrix=bt709,format=yuv420p',
+      '-vf', 'scale=in_range=full:out_range=tv:out_color_matrix=bt709,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709',
       '-c:v', 'libx264', '-preset', 'slow', '-crf', String(o.crf || 16)].concat(BT709_TAGS, ['-movflags', '+faststart', silent]),
     { stdio: ['pipe', 'inherit', 'inherit'] });
     const done = new Promise((resolve, reject) => ff.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg exited ' + c)))));
