@@ -138,6 +138,15 @@ you upload them.
 
 AGENTS.md §2 lists each piece and why it exists; §5 has the Salesforce traps.
 
+### Capture once, compose offline
+
+For marketing-grade output, film the app once and render the rest:
+
+- `runDemo(board, { frames: true, capture: { dir } })` runs the storyboard like the preflight and saves `rec.still(key, { subjects })`: lossless 2x stills below the band, each with its subject boxes, taken only after the never-show audit reads zero, then OCR'd.
+- `renderComposition({ captureDir, timeline, voManifestPath, words, aspect })` renders the film: a neutral canvas, a camera that pushes in on each subject as its word is spoken, a soft ring, an arcing cursor with click ripples, short kinetic titles (Google Sans Flex), one hook and end card, and a stereo master at -16 LUFS with a ducked music bed. `aspect` is `16:9`, `1:1` or `9:16`, all from the same capture.
+- A timeline is data: per narration line, the still, a title of at most 8 words, and moves such as `{ focus: 'row', word: 'late' }` or `{ click: 'tab', then: 'next-still', word: 'shows' }`.
+- Music is a slot: pass `bed: { file }` with a track you have licensed. Without one the bed is silent. Never commit a track.
+
 ## Keys
 
 Settings encrypts keys with the macOS keychain (Electron `safeStorage`) and

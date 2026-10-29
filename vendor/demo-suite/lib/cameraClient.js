@@ -261,6 +261,10 @@ function buildCameraClientJs(config) {
     ' if(ring2){ring2.style.left=x+"px";ring2.style.top=y+"px";ring2.style.opacity=(0.9*k).toFixed(3);' +
     '  ring2.style.transform="scale("+(0.55+0.45*k).toFixed(3)+")";}' +
     ' return true;};' +
+    // A full-frame card (slide, end card) takes the cursor with it: the
+    // pointer sat on M1's end card for its whole 10 s (2026-10-26).
+    'window.__cursorUnder=function(alpha){["__demoCursor","__demoCursorRing"].forEach(function(id){' +
+    ' var e=document.getElementById(id);if(e)e.style.visibility=alpha>0.02?"hidden":"";});};' +
     'window.__cursorHide=function(){["__demoCursor","__demoCursorRing"].forEach(function(id){' +
     ' var e=document.getElementById(id);if(e)e.style.display="none";});};' +
 
@@ -318,7 +322,7 @@ function buildCameraClientJs(config) {
     'ui-sans-serif,system-ui,-apple-system,sans-serif;color:#5F7488";' +
     '   el.appendChild(f);}' +
     '  document.body.appendChild(el);}' +
-    ' el.style.opacity=String(alpha);};' +
+    ' el.style.opacity=String(alpha);__cursorUnder(alpha);};' +
     'window.__slideRow=function(i,alpha){' +
     ' var rows=document.querySelectorAll("#__demoSlide .__demoSlideRow");' +
     ' if(rows[i]) rows[i].style.opacity=String(alpha);};' +
@@ -339,7 +343,7 @@ function buildCameraClientJs(config) {
     '   d.textContent=L.text; d.style.cssText=L.css; el.appendChild(d);' +
     '  });' +
     '  document.body.appendChild(el);}' +
-    ' el.style.opacity=String(alpha);' +
+    ' el.style.opacity=String(alpha);__cursorUnder(alpha);' +
     ' el.style.transform="translateY("+((1-alpha)*14).toFixed(2)+"px)";};'
   );
 }

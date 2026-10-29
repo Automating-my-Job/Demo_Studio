@@ -75,6 +75,13 @@ implementation; the bug stories are the reason.
 | Band over the app's global header (`__band(text, '#oneHeader')`) | `cameraClient.js` | Live takes never film Salesforce's global header (search, avatar, scratch banner); the band registers a cover rect so labels under it fail the preflight |
 | Frame scan (OCR) and word-for-word narration check | `frameScan.js` + `frameScan.swift` (macOS Vision), `preflight.js` (`wordDiff`), `verifyNarration.js` (`transcribeFile`) | The DOM audit cannot see pixels (canvas, images, untracked frames); the scan reads the finished video. Whisper output is compared to the script word for word, not just for repeats |
 | `rec.scrollTo(target, {within})`, display-only `hide` rules, option subjects | `liveInput.js` (`scrollTo`, settles after smooth scrolling), `liveKit.js` (`__redact` `hide`: sections by text, columns by header) | Setup listboxes hold ~50 permission sets in 10 rows: scroll with real wheel steps, wait until the target stops moving, then click. User pages carry Login History: hide it before every frame. An `<option>` was being promoted to its whole list box and the click picked the wrong set |
+| **Capture, then compose (2026-10-28), opt-in: `runDemo({capture})` + `renderComposition()`** | `recorder.js` (`rec.still`, `finishCapture`), `compose.js`, `composePlan.js`, `composeStage.js`, `audioMaster.js`; tests `test/compose`, `composePlan` | The live take was also the final film: 6 of 23 Revenue Execution takes were full re-films only to change an overlay or the aspect ratio, and the look (full-page UI, grey dim, a header-masking band) could not get better without risking the take. Now the app is touched once (audited 2x stills); camera, cursor, titles, sound and every aspect render offline |
+| Stills: lossless 2x PNG below the band, subject boxes, audit zero, labels counted, OCR on every still | `recorder.js` (`captureStill`) | The global header's pixels are never saved; every pixel that reaches the film passed the DOM audit and the OCR |
+| Pure plan, shared with the page | `composePlan.js` (inlined into the stage) | Voice paces everything (speech-to-speech gaps, measured with silencedetect, never the clip's padded length); moves cue on Whisper words; the camera frames subjects within the capture's pixel limit and never shows canvas once zoomed; the tests sample what the film draws |
+| Design: neutral canvas, window, Material easing, soft ring, arcing cursor with ripple, kinetic titles, one hook and end card | `composeStage.js` (brand tokens from revenue.opsgs.com; Google Sans Flex, OFL 1.1, bundled under `assets/fonts` with its licence) | "Google-like" (see the video-module proposal): legible at feed size, on brand, no pointer on any card |
+| Audio master: stereo, music bed slot with sidechain ducking (silent until a licensed track is passed), two-pass loudnorm to -16 LUFS / -1.5 dBTP | `audioMaster.js` | The live takes shipped mono at -19.9 LUFS with a -0.1 dBFS peak. Music is never committed |
+| Live path delivery fixes | `recorder.js` (`BT709_FROM_JPEG`, `masterInPlace`), `cameraClient.js` (`__cursorUnder`) | Every live take was tagged full-range BT.601 (`pc`/`bt470bg`); audio now masters like the compose path; the cursor no longer sits on a full-frame end card or slide |
+| Known ASR quirks accepted, and listed | `preflight.js` (`KNOWN_ASR_QUIRKS`, `wordDiff(…, {accept})`) | 15 of 23 takes needed a person to clear "dot"→".", in/and, won/one, Close/Closed by hand |
 
 ## 3. The director's loop (what a human/agent did around the tool)
 
@@ -157,6 +164,11 @@ the specification for §4.
    client; `runner/subject.js` still compiles `selector` to
    `document.querySelector`, so Gemini-framed demos cannot target LWC, Lit,
    or Stencil apps yet.
+10. **Compose for every storyboard — OPEN.** M1 is the proof
+    (`demo/video/revenue-execution-marketing/m1-compose.js` in the Salesforce
+    repo). Next: 9:16, short live clips (real typing, Setup saves) as layers
+    for the setup series, a licensed music track, and a demo.json `still`
+    action so Gemini-framed demos can compose too.
 
 ## 5. Traps already paid for — do not rediscover
 
@@ -333,6 +345,15 @@ the specification for §4.
   render in shadow roots, so a `<table>`'s own textContent is empty: find the
   cell, then walk up. Cut only when `__busy()` is false. The Setup gear opens
   a NEW TAB (the recorder films one page): enter Setup with a cut.
+- **`Page.captureScreenshot`'s `clip` is in DOCUMENT px, not viewport px.**
+  The first M1 capture clipped "below the band" at y=98 on a page scrolled
+  down: the still showed the blank region above the viewport, with the band
+  halfway down. Offset the clip by `Page.getLayoutMetrics`'
+  `cssVisualViewport.pageX/pageY` (regression test: the red-marker still in
+  `test/compose.test.js`).
+- **Hidden text never loads its web font.** The compose stage's titles and
+  cards start `display:none`, so `document.fonts.ready` resolved with the
+  font unloaded; load it explicitly (`document.fonts.load`) before frame 0.
 - **Live-take checklist.** `dryRun` preflight → record (`strictSubjects`) →
   `scanVideo` → `wordDiff` per clip and on the whole cut → contact sheets
   (`ffmpeg -vf fps=2,scale=640:-1,tile=3x4`). Worked example:

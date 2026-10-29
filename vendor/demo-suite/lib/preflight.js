@@ -108,9 +108,19 @@ function speechWords(text) {
  * spell the same letters are equal; otherwise the differing stretches are
  * listed. Returns {ok, diffs: [{script, heard}]}.
  */
-function wordDiff(script, heard) {
+function wordDiff(script, heard, opts) {
   const a = speechWords(script), b = speechWords(heard);
   if (a.join('') === b.join('')) return { ok: true, diffs: [] };
+  const accept = (opts && opts.accept) || [];
+  if (accept.length) {
+    // Known ASR quirks for this voice: a diff that is exactly one of these
+    // pairs is accepted (and listed), so a take is only flagged for real misses.
+    const key = (d) => d.script + '|' + d.heard;
+    const ok = new Set(accept.map((p) => speechWords(p.script).join(' ') + '|' + speechWords(p.heard).join(' ')));
+    const raw = wordDiff(script, heard);
+    const diffs = raw.diffs.filter((d) => !ok.has(key(d)));
+    return { ok: diffs.length === 0, diffs: diffs, accepted: raw.diffs.filter((d) => ok.has(key(d))) };
+  }
   // LCS over words, then report each unmatched stretch side by side.
   const m = a.length, n = b.length;
   const L = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
@@ -134,4 +144,16 @@ function wordDiff(script, heard) {
   return { ok: diffs.length === 0, diffs: diffs };
 }
 
-module.exports = { quotedLabels: quotedLabels, spokenText: spokenText, closest: closest, formatReport: formatReport, levenshtein: levenshtein, speechWords: speechWords, wordDiff: wordDiff };
+/**
+ * Whisper's known mishearings of Chirp3-HD Charon, each confirmed by ear on
+ * the 2026-10-27 takes (the clip says the scripted word). wordDiff(…, {accept}).
+ */
+const KNOWN_ASR_QUIRKS = [
+  { script: 'dot', heard: '' },
+  { script: 'in', heard: 'and' },
+  { script: 'won', heard: 'one' },
+  { script: 'close', heard: 'closed' },
+  { script: 'loss', heard: 'lost' },
+];
+
+module.exports = { KNOWN_ASR_QUIRKS: KNOWN_ASR_QUIRKS, quotedLabels: quotedLabels, spokenText: spokenText, closest: closest, formatReport: formatReport, levenshtein: levenshtein, speechWords: speechWords, wordDiff: wordDiff };

@@ -143,6 +143,50 @@ function findChrome(explicit) {
   throw new Error('No Chrome/Chromium found. Pass { chromePath } explicitly.');
 }
 
+// Every delivered file is limited-range BT.709 and tagged so: the JPEG
+// frames are full-range BT.601, and untagged output played back washed out
+// or crushed depending on the player (every 2026-10-27 take was tagged
+// pc/bt470bg).
+const BT709_TAGS = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709'];
+const BT709_FROM_JPEG = (W, H) => 'scale=' + W + ':' + H + ':in_range=full:out_range=tv:in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p';
+
+/** Re-masters an mp4's audio in place (video copied): stereo, two-pass loudnorm. */
+function masterInPlace(file, target) {
+  const { masterAudioArgs, measureLoudness } = require('./audioMaster.js');
+  const tmp = file.replace(/\.mp4$/, '.master.mp4');
+  const measured = measureLoudness(file, target);
+  execFileSync('ffmpeg', masterAudioArgs(file, tmp, measured, target), { stdio: 'inherit' });
+  fs.renameSync(tmp, file);
+}
+
+/** A subject's top-frame rect, padded, in the still's own px (below the band). */
+function stillRect(rect, pad, top, W, H) {
+  const p = Array.isArray(pad) ? pad : [pad || 0, pad || 0, pad || 0, pad || 0];
+  const r = [rect.l - p[3], rect.t - p[0] - top, rect.r + p[1], rect.b + p[2] - top];
+  return [Math.max(0, r[0]), Math.max(0, r[1]), Math.min(W, r[2]), Math.min(H - top, r[3])].map((v) => Math.round(v));
+}
+
+/** Writes capture.json (labels, boxes, audit counts; never a URL) and OCRs every still. */
+function finishCapture(cap, o) {
+  const manifest = {
+    version: 1, viewport: [o.W, o.H], scale: o.scale,
+    stills: Object.fromEntries(o.stills.map((s) => [s.key, { file: s.file, width: s.width, height: s.height, subjects: s.subjects }])),
+    audits: o.audits.map((a) => ({ where: a.where, ok: a.ok })),
+    preflight: o.report,
+  };
+  let scan = null;
+  if (cap.scan !== false && o.stills.length) {
+    const { scanImages } = require('./frameScan.js');
+    scan = scanImages(o.stills.map((s) => path.join(cap.dir, s.file)), { allowEmails: cap.allowEmails });
+    manifest.scan = { images: scan.frames, hits: scan.hits.length, counts: scan.counts };
+    if (scan.hits.length) {
+      throw new Error('Still OCR found never-show items: ' + scan.hits.map((h) => h.name + ' ' + h.kinds.join('+')).join(', ') + '. Capture rejected.');
+    }
+  }
+  fs.writeFileSync(path.join(cap.dir, 'capture.json'), JSON.stringify(manifest, null, 2));
+  return { capture: true, dir: cap.dir, manifest: manifest, report: o.report, beats: o.beats, audits: o.audits, scan: scan };
+}
+
 /**
  * Runs `buildFn(rec)` against a fresh headless Chrome instance and produces
  * a finished mp4.
@@ -184,6 +228,14 @@ function findChrome(explicit) {
  *   clicked or typed-into subject. [opts.cursorStart=[x,y]] where it rests.
  * @param {boolean} [opts.burnCaptions=true] - false: say() draws no caption
  *   bar (captions ship as WebVTT instead).
+ * @param {Object} [opts.capture] - CAPTURE mode, for the compose stage
+ *   (compose.js): run the storyboard like the preflight (no film, no
+ *   narration waits; every beat's labels are still checked), but at 2x
+ *   device pixels, and enable rec.still(key, {subjects}). Each still is a
+ *   lossless PNG of the page below the band (the global header is never
+ *   saved), taken only after a never-show audit reads zero, with its named
+ *   subjects' boxes. Writes {dir}/stills/*.png and {dir}/capture.json (no
+ *   URLs, no ids), then OCRs every still. {dir, scale=2, allowEmails, scan=true}
  * @param {boolean} [opts.dryRun=false] - the wording PREFLIGHT: run the whole
  *   storyboard against the live page without capturing a frame or waiting
  *   on narration, check every beat's labels in every frame, and throw a
@@ -201,7 +253,11 @@ async function runDemo(buildFn, opts) {
   const FRAME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-suite-frames-'));
   const STAGE_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-suite-mux-'));
   const stallCeilingMs = opts.stallMs === undefined ? 5000 : opts.stallMs;
-  const DRY = !!opts.dryRun;
+  const CAPTURE = opts.capture || null;
+  if (CAPTURE && !opts.frames) throw new Error('capture needs runDemo({frames: true})');
+  // Capture runs like the preflight: nothing is filmed or timed.
+  const DRY = !!opts.dryRun || !!CAPTURE;
+  const SCALE = CAPTURE ? (CAPTURE.scale || 2) : 1;
   const chromeBin = findChrome(opts.chromePath);
 
   const VO = opts.voManifestPath && fs.existsSync(opts.voManifestPath)
@@ -239,6 +295,7 @@ async function runDemo(buildFn, opts) {
   let frameReg = null;
   const beats = [];
   const audits = [];
+  const stills = [];
   const frames = [];
   let stillMs = 0;
   const stalls = [];
@@ -269,7 +326,7 @@ async function runDemo(buildFn, opts) {
     // producing letterboxed frames unless the device metrics are overridden
     // to exactly W x H.
     await client.send('Emulation.setDeviceMetricsOverride', {
-      width: W, height: H, deviceScaleFactor: 1, mobile: false,
+      width: W, height: H, deviceScaleFactor: SCALE, mobile: false,
     });
 
     let n = 0;
@@ -605,7 +662,7 @@ async function runDemo(buildFn, opts) {
       live = createLive({
         client: client, frames: frameReg, run: run, motion: motion, stepsFor: stepsFor,
         frame: async (ms) => { stillMs = 0; await shoot(ms); },
-        opts: opts, dry: DRY, width: W, height: H,
+        opts: opts, dry: !!opts.dryRun, width: W, height: H,
       });
     }
     const RANK = { visible: 3, covered: 2, hidden: 1, missing: 0 };
@@ -678,6 +735,44 @@ async function runDemo(buildFn, opts) {
       if (o.say !== undefined) await say(o.caption !== undefined ? o.caption : spokenText(o.say), o.holdMs || 1, key);
     };
 
+    // CAPTURE: one audited, lossless 2x still of the page below the band,
+    // with its named subjects' boxes in the still's own CSS px.
+    const captureStill = async (key, o) => {
+      if (!CAPTURE) throw new Error('still() needs runDemo({capture})');
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(key) || stills.some((x) => x.key === key)) throw new Error('still(): bad or repeated key ' + JSON.stringify(key));
+      o = o || {};
+      await retryGone(ensureTop);
+      await run('(window.__spotOff&&__spotOff(),window.__cursorHide&&__cursorHide(),true)');
+      const top = o.clipTop !== undefined ? o.clipTop
+        : ((await run('(function(){var b=document.getElementById("__demoBand");return b&&b.style.display!=="none"?Math.round(b.getBoundingClientRect().bottom):0})()')).result.value || 0);
+      const subjects = {};
+      for (const name of Object.keys(o.subjects || {})) {
+        const s = o.subjects[name];
+        const hit = await needLive('still').resolve(s);
+        if (!hit) throw new Error('still ' + key + ': subject "' + name + '" is not on screen');
+        subjects[name] = stillRect(hit.rect, s && s.pad, top, W, H);
+      }
+      const counts = await audit('still:' + key);
+      if (Object.keys(counts).some((k) => counts[k] > 0)) {
+        throw new Error('Never-show audit failed at still ' + key + ': ' + Object.keys(counts).filter((k) => counts[k] > 0).map((k) => k + '=' + counts[k]).join(', '));
+      }
+      // The still is what the viewer sees during its beat: its labels count.
+      await checkLabels();
+      // Redaction again right before the pixels are taken, as every film frame does.
+      await prepareFrames();
+      if (opts.everyFrameJs) await run(opts.everyFrameJs);
+      // The clip is in DOCUMENT px: offset it by the scroll, or a scrolled
+      // page films the blank region above the viewport (M1's first capture).
+      const lm = await client.send('Page.getLayoutMetrics');
+      const vv = lm.cssVisualViewport || lm.visualViewport || {};
+      const r = await client.send('Page.captureScreenshot', { format: 'png', clip: { x: vv.pageX || 0, y: (vv.pageY || 0) + top, width: W, height: H - top, scale: 1 } });
+      const file = path.join('stills', key + '.png');
+      fs.mkdirSync(path.join(CAPTURE.dir, 'stills'), { recursive: true });
+      fs.writeFileSync(path.join(CAPTURE.dir, file), Buffer.from(r.data, 'base64'));
+      stills.push({ key: key, file: file, width: W, height: H - top, scale: SCALE, subjects: subjects });
+      console.log('     still ' + key + ': ' + Object.keys(subjects).length + ' subject(s), audit zero');
+    };
+
     const rec = {
       go, say, atVo, type, click, frame, spot, spotMove, spotOut, crawlThrough, observe, waitFor,
       hold, settle, motion, stepsFor,
@@ -693,7 +788,9 @@ async function runDemo(buildFn, opts) {
       slideGone: () => run('__slideGone()'),
       cta: (lines, alpha) => run('__cta(' + JSON.stringify(lines) + ',' + alpha + ')'),
       voManifest: VO,
-      dryRun: DRY,
+      dryRun: !!opts.dryRun,
+      capturing: !!CAPTURE,
+      still: captureStill,
       beat: beatFn,
       endBeat: closeBeat,
       audit: audit,
@@ -733,6 +830,7 @@ async function runDemo(buildFn, opts) {
       err.preflight = { beats: beats, audits: audits };
       throw err;
     }
+    if (CAPTURE) return finishCapture(CAPTURE, { W: W, H: H, scale: SCALE, stills: stills, report: report, beats: beats, audits: audits });
     return { dryRun: true, report: report, beats: beats, audits: audits };
   }
 
@@ -764,9 +862,9 @@ async function runDemo(buildFn, opts) {
   const silent = AUDIO.length ? OUT.replace(/\.mp4$/, '.silent.mp4') : OUT;
   execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
     '-f', 'concat', '-safe', '0', '-i', listFile,
-    '-vf', 'fps=' + FPS + ',scale=' + W + ':' + H,
+    '-vf', 'fps=' + FPS + ',' + BT709_FROM_JPEG(W, H),
     '-c:v', 'libx264', '-preset', 'slow', '-crf', String(opts.crf || 20),
-    '-pix_fmt', 'yuv420p', '-movflags', '+faststart', silent], { stdio: 'inherit' });
+    '-pix_fmt', 'yuv420p'].concat(BT709_TAGS, ['-movflags', '+faststart', silent]), { stdio: 'inherit' });
 
   if (AUDIO.length) {
     const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', silent];
@@ -786,6 +884,9 @@ async function runDemo(buildFn, opts) {
       '-movflags', '+faststart', OUT);
     execFileSync('ffmpeg', args, { stdio: 'inherit' });
     fs.unlinkSync(silent);
+    // Stereo at -16 LUFS / -1.5 dBTP: the raw mix measured -19.9 LUFS with
+    // a -0.1 dBFS peak in mono (M1, 2026-10-26).
+    if (opts.master !== false) masterInPlace(OUT, opts.loudness);
   }
 
   fs.rmSync(FRAME_DIR, { recursive: true, force: true });
@@ -797,4 +898,4 @@ async function runDemo(buildFn, opts) {
   return { outPath: OUT, bytes: bytes, durationSec: durationSec, beats: beats, audits: audits };
 }
 
-module.exports = { runDemo: runDemo, observeFrameIntervalMs: observeFrameIntervalMs, traceUrlLabel: traceUrlLabel, filmFrameFloorMs: filmFrameFloorMs, concatDurations: concatDurations };
+module.exports = { runDemo: runDemo, observeFrameIntervalMs: observeFrameIntervalMs, traceUrlLabel: traceUrlLabel, filmFrameFloorMs: filmFrameFloorMs, concatDurations: concatDurations, findChrome: findChrome, stillRect: stillRect, BT709_TAGS: BT709_TAGS };

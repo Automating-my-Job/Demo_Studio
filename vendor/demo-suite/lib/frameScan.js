@@ -96,4 +96,29 @@ function scanVideo(videoPath, opts) {
   }
 }
 
-module.exports = { scanVideo: scanVideo, classifyLines: classifyLines };
+/**
+ * OCR still images (the compose stage's captures). Returns {frames, hits,
+ * counts}; a hit carries the image's file name and categories only.
+ */
+function scanImages(files, opts) {
+  const o = opts || {};
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-suite-scan-'));
+  try {
+    files.forEach((f, i) => fs.copyFileSync(f, path.join(tmp, String(i).padStart(5, '0') + '.png')));
+    const lines = JSON.parse(execFileSync(ocrBinary(), [tmp], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+    const names = Object.keys(lines).sort();
+    const hits = [];
+    const counts = { email: 0, url: 0, orgId: 0, recordId: 0, sensitivePage: 0 };
+    names.forEach((name, i) => {
+      const kinds = classifyLines(lines[name], o.allowEmails);
+      if (!kinds.length) return;
+      kinds.forEach((k) => { counts[k]++; });
+      hits.push({ name: path.basename(files[i]), kinds: kinds });
+    });
+    return { frames: names.length, hits: hits, counts: counts };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+module.exports = { scanVideo: scanVideo, scanImages: scanImages, classifyLines: classifyLines };
